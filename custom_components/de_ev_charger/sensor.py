@@ -1,15 +1,24 @@
 import json
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
-from homeassistant.const import UnitOfElectricPotential, UnitOfElectricCurrent, UnitOfPower, UnitOfTemperature
+from homeassistant.const import UnitOfElectricPotential, UnitOfElectricCurrent, UnitOfPower, UnitOfTemperature, UnitOfEnergy, UnitOfTime
 from .const import DOMAIN
 from .entity import DeEvChargerEntity
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    
     entities = [
         EvChargerStateSensor(coordinator, entry, "109", "Work State"),
+        EvChargerStateSensor(coordinator, entry, "104", "Alarm Info"),
+        EvChargerStateSensor(coordinator, entry, "111", "Debug Output"),
+        
         EvChargerJsonSensor(coordinator, entry, "102", "Temperature", "t", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS, 0.1),
-        EvChargerJsonSensor(coordinator, entry, "106", "Control Pilot Voltage", "cp", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 1.0)
+        EvChargerJsonSensor(coordinator, entry, "106", "Control Pilot Voltage", "cp", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 1.0),
+        
+        # New Session Metrics
+        EvChargerJsonSensor(coordinator, entry, "102", "Session Power", "p", SensorDeviceClass.POWER, UnitOfPower.WATT, 1.0),
+        EvChargerJsonSensor(coordinator, entry, "102", "Session Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 1.0),
+        EvChargerJsonSensor(coordinator, entry, "102", "Session Duration", "d", SensorDeviceClass.DURATION, UnitOfTime.SECONDS, 1.0),
     ]
     
     for phase in ["L1", "L2", "L3"]:
@@ -28,7 +37,11 @@ class EvChargerStateSensor(DeEvChargerEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return self.coordinator.data.get(self.dp)
+        val = self.coordinator.data.get(self.dp)
+        # Handle empty JSON strings correctly
+        if val == "{}" or val == "":
+            return "None"
+        return val
 
 class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
     def __init__(self, coordinator, entry, dp, name, json_key, device_class, unit, scale):
@@ -40,7 +53,12 @@ class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
         self._attr_unique_id = f"de_ev_{name.lower().replace(' ', '_')}"
         self._attr_device_class = device_class
         self._attr_native_unit_of_measurement = unit
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        
+        # Duration shouldn't have a measurement state class if it resets
+        if device_class != SensorDeviceClass.DURATION:
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        else:
+            self._attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     @property
     def native_value(self):

@@ -24,8 +24,21 @@ class EvChargerCurrentLimit(DeEvChargerEntity, NumberEntity):
 
     @property
     def native_value(self):
-        return self.coordinator.data.get(self.dp)
+        # Safely convert incoming Tuya data (which might be a string) into a float
+        val = self.coordinator.data.get(self.dp)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+        return None
 
     async def async_set_native_value(self, value: float):
+        # Convert float back to int for Tuya API
         await send_tuya_command(self.hass, self.entry, self.dp, int(value))
+        
+        # Instantly refresh data locally to prevent UI bouncing
+        self.coordinator.data[self.dp] = int(value)
+        self.async_write_ha_state()
+        
         await self.coordinator.async_request_refresh()

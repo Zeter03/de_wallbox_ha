@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose Setup Method",
+        "menu_options": {
+          "auto": "Auto Discover (Scan Network)",
+          "manual": "Manual Configuration"
+        }
+      },
+      "auto": {
+        "title": "Discovered Tuya Devices",
+        "data": {
+          "device_id": "Select your EV Charger",
+          "local_key": "Local Key"
+        }
+      },
+      "manual": {
+        "title": "Manual Configuration",
+        "data": {
+          "device_id": "Device ID",
+          "ip_address": "IP Address",
+          "local_key": "Local Key",
+          "version": "Protocol Version (usually 3.3 or 3.5)"
+        }
+      }
+    },
+    "error": {
+      "no_devices": "No devices found via UDP broadcast. Please configure manually."
+    },
+    "abort": {
+      "already_configured": "This EV Charger is already configured."
+    }
+  }
+}
