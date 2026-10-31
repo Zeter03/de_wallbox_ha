@@ -2,34 +2,34 @@
   "config": {
     "step": {
       "user": {
-        "title": "Choose Setup Method",
+        "title": "Setup dé EV Charger",
+        "description": "How would you like to connect to your wallbox? Local auto-discovery is recommended.",
         "menu_options": {
-          "auto": "Auto Discover (Scan Network)",
-          "manual": "Manual Configuration"
+          "auto": "🔍 Auto Discover (Scan Network)",
+          "manual": "⚙️ Manual Configuration"
         }
       },
       "auto": {
         "title": "Discovered Tuya Devices",
+        "description": "Select your charger from the list. You must provide the 16-character Local Key from the Tuya IoT Platform.",
         "data": {
           "device_id": "Select your EV Charger",
-          "local_key": "Local Key"
+          "local_key": "Tuya Local Key"
         }
       },
       "manual": {
         "title": "Manual Configuration",
+        "description": "Enter the details manually if UDP broadcast is blocked on your network.",
         "data": {
           "device_id": "Device ID",
-          "ip_address": "IP Address",
-          "local_key": "Local Key",
-          "version": "Protocol Version (usually 3.3 or 3.5)"
+          "ip_address": "IP Address (e.g., 192.168.1.50)",
+          "local_key": "Tuya Local Key",
+          "version": "Protocol Version (leave as 3.5)"
         }
       }
     },
     "error": {
-      "no_devices": "No devices found via UDP broadcast. Please configure manually."
-    },
-    "abort": {
-      "already_configured": "This EV Charger is already configured."
+      "no_devices": "No devices found via UDP broadcast. Please make sure the charger is powered on and on the same VLAN."
     }
   }
 }
