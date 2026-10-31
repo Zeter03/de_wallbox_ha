@@ -1,0 +1,10 @@
+{
+  "domain": "de_ev_charger",
+  "name": "dé EV Charger (Tuya Local)",
+  "codeowners": [ "@your_github_username" ],
+  "config_flow": true,
+  "dependencies": [],
+  "iot_class": "local_polling",
+  "requirements": [ "tinytuya==1.13.1" ],
+  "version": "1.0.0"
+}
