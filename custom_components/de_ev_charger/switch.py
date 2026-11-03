@@ -25,8 +25,8 @@ class EvChargerSwitch(DeEvChargerEntity, SwitchEntity):
         # Specific logic for the Start/Stop Charging Switch
         if self.dp == "140":
             work_state = self.coordinator.data.get("109", "")
-            # If the charger is in any of these active session states, the switch is ON
-            return work_state in ["WORKING", "WAIT", "PAUSE", "ERRORPAUSE"]
+            # Switch is ONLY On if actively charging or waiting for the car to accept power
+            return work_state in ["WORKING", "WAIT"]
             
         # Standard logic for configuration toggles (Plug & Charge, Single Phase, etc.)
         return bool(self.coordinator.data.get(self.dp, False))
@@ -34,7 +34,7 @@ class EvChargerSwitch(DeEvChargerEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs):
         await send_tuya_command(self.hass, self.entry, self.dp, True)
         
-        # Optimistically update the UI instantly so the switch doesn't bounce back before the next poll
+        # Optimistically update the UI instantly
         if self.dp == "140":
             self.coordinator.data["109"] = "WORKING"
         else:
@@ -48,7 +48,7 @@ class EvChargerSwitch(DeEvChargerEntity, SwitchEntity):
         
         # Optimistically update the UI instantly
         if self.dp == "140":
-            self.coordinator.data["109"] = "IDLEINS" # Assume Idle Inserted after stopping
+            self.coordinator.data["109"] = "PAUSE" # Setting it to PAUSE when turned off
         else:
             self.coordinator.data[self.dp] = False
             
