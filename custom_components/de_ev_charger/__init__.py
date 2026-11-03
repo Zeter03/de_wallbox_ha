@@ -1,5 +1,6 @@
 import logging
 import json
+import time
 import tinytuya
 from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
@@ -17,13 +18,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     key = entry.data[CONF_LOCAL_KEY]
     version = float(entry.data.get(CONF_VERSION, 3.5))
 
+    # We track the work state locally to know when to send heartbeats
+    last_work_state = "UNKNOWN"
+
     def fetch_data():
+        nonlocal last_work_state
         try:
             device = tinytuya.OutletDevice(dev_id, ip, key)
             device.set_version(version)
+            
+            # If the charger is actively charging, send the heartbeat
+            # to force the main MCU to push live metrics to the Wi-Fi chip's cache.
+            if last_work_state == "WORKING":
+                _LOGGER.debug("Charger is WORKING, sending Heartbeat (DP 188)")
+                try:
+                    device.set_value("188", True)
+                    # Give the MCU half a second to reply to the Wi-Fi module with fresh data
+                    time.sleep(0.5) 
+                except Exception as err:
+                    _LOGGER.warning(f"Failed to send Heartbeat: {err}")
+
+            # Now fetch the data (which will contain the refreshed metrics if charging)
             payload = device.status()
-            if 'dps' in payload:
+            if payload and 'dps' in payload:
+                # Update our state tracker for the next cycle
+                last_work_state = payload['dps'].get("109", last_work_state)
                 return payload['dps']
+                
             raise Exception(f"No dps in payload: {payload}")
         except Exception as e:
             raise UpdateFailed(f"Error fetching data: {e}")
