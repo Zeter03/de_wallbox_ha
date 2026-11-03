@@ -17,23 +17,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
         # DP 102 - Real Time Metrics
         EvChargerJsonSensor(coordinator, entry, "102", "Temperature", "t", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS, 0.1, SensorStateClass.MEASUREMENT),
         EvChargerJsonSensor(coordinator, entry, "102", "Session Power", "p", SensorDeviceClass.POWER, UnitOfPower.KILO_WATT, 0.1, SensorStateClass.MEASUREMENT),
-        
-        # TOTAL_INCREASING allows these to be used in the Home Assistant Energy Dashboard
         EvChargerJsonSensor(coordinator, entry, "102", "Session Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, SensorStateClass.TOTAL_INCREASING),
         EvChargerJsonSensor(coordinator, entry, "102", "Session Duration", "d", SensorDeviceClass.DURATION, UnitOfTime.SECONDS, 0.1, None),
         
         # DP 106 - Hardware / Lifetime Information
         EvChargerJsonSensor(coordinator, entry, "106", "Control Pilot Voltage", "cp", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 1.0, SensorStateClass.MEASUREMENT),
-        EvChargerJsonSensor(coordinator, entry, "106", "Lifetime Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 1.0, SensorStateClass.TOTAL_INCREASING),
-        EvChargerJsonSensor(coordinator, entry, "106", "Lifetime Time", "t", SensorDeviceClass.DURATION, UnitOfTime.HOURS, 1.0, None),
+        
+        # Fixed: Scaled by 0.1
+        EvChargerJsonSensor(coordinator, entry, "106", "Lifetime Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, SensorStateClass.TOTAL_INCREASING),
+        
+        # Fixed: Renamed from Time to Sessions, scaled by 0.1, removed duration formatting
+        EvChargerJsonSensor(coordinator, entry, "106", "Total Charging Sessions", "t", None, "sessions", 0.1, SensorStateClass.TOTAL_INCREASING),
     ]
     
     # Generate Phase L1, L2, L3 Sensors
     for phase in ["L1", "L2", "L3"]:
         entities.append(EvChargerPhaseSensor(coordinator, entry, phase, 0, f"{phase} Voltage", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 0.1))
         entities.append(EvChargerPhaseSensor(coordinator, entry, phase, 1, f"{phase} Current", SensorDeviceClass.CURRENT, UnitOfElectricCurrent.AMPERE, 0.1))
-        
-        # Notice Power is now KILO_WATT and scale is 0.1
         entities.append(EvChargerPhaseSensor(coordinator, entry, phase, 2, f"{phase} Power", SensorDeviceClass.POWER, UnitOfPower.KILO_WATT, 0.1))
         
     async_add_entities(entities)
@@ -74,8 +74,14 @@ class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
         if raw:
             try:
                 data = json.loads(raw)
+                # Parse as int first if possible, fallback to float, so count scales cleanly
                 val = float(data.get(self.json_key, 0))
-                return round(val * self.scale, 2)
+                
+                # If we scale by 0.1 and it's a session count, we want a clean integer
+                result = val * self.scale
+                if self.json_key == "t" and self.dp == "106":
+                    return int(result)
+                return round(result, 2)
             except (ValueError, TypeError, json.JSONDecodeError):
                 return None
         return None
