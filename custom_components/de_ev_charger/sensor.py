@@ -17,6 +17,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         # DP 105 - Last Session Extracted Metrics
         EvChargerJsonSensor(coordinator, entry, "105", "Last Session Energy", "c", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, None),
         EvChargerDurationSensor(coordinator, entry, "105", "Last Session Duration", json_key="d", scale=1.0),
+        
+        # NEW: Last Session Start & End Times (DD.MM. - HH:MM)
+        EvChargerHistoryTimeSensor(coordinator, entry, "105", "Last Session Start Time", time_key="s", icon="mdi:clock-start"),
+        EvChargerHistoryTimeSensor(coordinator, entry, "105", "Last Session End Time", time_key="e", icon="mdi:clock-end"),
 
         # DP 102 - Real Time Metrics
         EvChargerJsonSensor(coordinator, entry, "102", "Temperature", "t", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS, 0.1, SensorStateClass.MEASUREMENT),
@@ -38,6 +42,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         
     async_add_entities(entities)
 
+
 class EvChargerStateSensor(DeEvChargerEntity, SensorEntity):
     """String based sensors for states, text info, and errors."""
     def __init__(self, coordinator, entry, dp, name, icon):
@@ -53,6 +58,47 @@ class EvChargerStateSensor(DeEvChargerEntity, SensorEntity):
         if val == "{}" or val == "":
             return "None"
         return val
+
+
+class EvChargerHistoryTimeSensor(DeEvChargerEntity, SensorEntity):
+    """Combines date from 't' and time from 's' or 'e' to create a DD.MM. - HH:MM string."""
+    def __init__(self, coordinator, entry, dp, name, time_key, icon):
+        super().__init__(coordinator, entry)
+        self.dp = dp
+        self.time_key = time_key
+        self._attr_name = f"{name}"
+        self._attr_unique_id = f"de_ev_time_{dp}_{time_key}"
+        self._attr_icon = icon
+
+    @property
+    def native_value(self):
+        raw = self.coordinator.data.get(self.dp)
+        if raw:
+            try:
+                data = json.loads(raw)
+                t_str = data.get("t", "")
+                time_str = data.get(self.time_key, "")
+                
+                if not t_str or not time_str:
+                    return None
+                    
+                # Extract date block: "2026-11-03 17:41:54" -> "2026-11-03"
+                date_part = t_str.split(" ")[0]
+                date_split = date_part.split("-")
+                
+                # Verify we got Year-Month-Day
+                if len(date_split) == 3:
+                    day = date_split[2]
+                    month = date_split[1]
+                    return f"{day}.{month}. - {time_str}"
+                
+                # Fallback to just the time if date parsing fails
+                return time_str
+
+            except (ValueError, TypeError, json.JSONDecodeError):
+                return None
+        return None
+
 
 class EvChargerDurationSensor(DeEvChargerEntity, SensorEntity):
     """Extracts duration and formats it as an HH:MM string."""
@@ -74,21 +120,18 @@ class EvChargerDurationSensor(DeEvChargerEntity, SensorEntity):
                 if self.json_key not in data:
                     return None
                 
-                # Apply the specific scale (0.1 for live, 1.0 for history) to get total seconds
                 total_seconds = float(data[self.json_key]) * self.scale
-                
-                # Calculate hours and minutes
                 hours = int(total_seconds // 3600)
                 minutes = int((total_seconds % 3600) // 60)
                 
-                # Format exactly as HH:MM
                 return f"{hours:02d}:{minutes:02d}"
             except (ValueError, TypeError, json.JSONDecodeError):
                 return None
         return None
 
+
 class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
-    """Extracts a specific key from a JSON string Data Point."""
+    """Extracts a specific numeric key from a JSON string Data Point."""
     def __init__(self, coordinator, entry, dp, name, json_key, device_class, unit, scale, state_class):
         super().__init__(coordinator, entry)
         self.dp = dp
@@ -107,7 +150,6 @@ class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
         if raw:
             try:
                 data = json.loads(raw)
-                
                 if self.json_key not in data:
                     return None
                     
@@ -121,6 +163,7 @@ class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
             except (ValueError, TypeError, json.JSONDecodeError):
                 return None
         return None
+
 
 class EvChargerPhaseSensor(DeEvChargerEntity, SensorEntity):
     """Extracts Phase Array Data like 'L1': [2250, 143, 32]."""
