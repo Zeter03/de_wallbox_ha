@@ -12,18 +12,17 @@ async def async_setup_entry(hass, entry, async_add_entities):
         EvChargerStateSensor(coordinator, entry, "104", "Alarm Info", "mdi:alert"),
         EvChargerStateSensor(coordinator, entry, "111", "Debug Output", "mdi:bug"),
         EvChargerStateSensor(coordinator, entry, "153", "Live Status Text", "mdi:information"),
-        EvChargerStateSensor(coordinator, entry, "105", "Last Session History", "mdi:history"),
+        EvChargerStateSensor(coordinator, entry, "105", "Last Session History (Raw)", "mdi:history"),
         
-        # NEW: Last Session Energy (extracted from DP 105, key 'c')
+        # DP 105 - Last Session Extracted Metrics
         EvChargerJsonSensor(coordinator, entry, "105", "Last Session Energy", "c", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, None),
+        EvChargerDurationSensor(coordinator, entry, "105", "Last Session Duration", json_key="d", scale=1.0),
 
         # DP 102 - Real Time Metrics
         EvChargerJsonSensor(coordinator, entry, "102", "Temperature", "t", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS, 0.1, SensorStateClass.MEASUREMENT),
         EvChargerJsonSensor(coordinator, entry, "102", "Session Power", "p", SensorDeviceClass.POWER, UnitOfPower.KILO_WATT, 0.1, SensorStateClass.MEASUREMENT),
         EvChargerJsonSensor(coordinator, entry, "102", "Session Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, SensorStateClass.TOTAL_INCREASING),
-        
-        # CHANGED: Session Duration with Custom HH:MM String Formatting
-        EvChargerDurationSensor(coordinator, entry, "102", "Session Duration"),
+        EvChargerDurationSensor(coordinator, entry, "102", "Session Duration", json_key="d", scale=0.1),
         
         # DP 106 - Hardware / Lifetime Information
         EvChargerJsonSensor(coordinator, entry, "106", "Control Pilot Voltage", "cp", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 1.0, SensorStateClass.MEASUREMENT),
@@ -56,12 +55,14 @@ class EvChargerStateSensor(DeEvChargerEntity, SensorEntity):
         return val
 
 class EvChargerDurationSensor(DeEvChargerEntity, SensorEntity):
-    """Extracts duration (d) from DP 102 and formats it as an HH:MM string."""
-    def __init__(self, coordinator, entry, dp, name):
+    """Extracts duration and formats it as an HH:MM string."""
+    def __init__(self, coordinator, entry, dp, name, json_key="d", scale=1.0):
         super().__init__(coordinator, entry)
         self.dp = dp
+        self.json_key = json_key
+        self.scale = scale
         self._attr_name = f"{name}"
-        self._attr_unique_id = f"de_ev_duration_{dp}"
+        self._attr_unique_id = f"de_ev_duration_{dp}_{json_key}"
         self._attr_icon = "mdi:timer-outline"
 
     @property
@@ -70,11 +71,11 @@ class EvChargerDurationSensor(DeEvChargerEntity, SensorEntity):
         if raw:
             try:
                 data = json.loads(raw)
-                if "d" not in data:
+                if self.json_key not in data:
                     return None
                 
-                # Scale by 0.1 to get total seconds
-                total_seconds = float(data["d"]) * 0.1
+                # Apply the specific scale (0.1 for live, 1.0 for history) to get total seconds
+                total_seconds = float(data[self.json_key]) * self.scale
                 
                 # Calculate hours and minutes
                 hours = int(total_seconds // 3600)
@@ -107,7 +108,6 @@ class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
             try:
                 data = json.loads(raw)
                 
-                # ONLY extract the data if the key actually exists in the JSON payload
                 if self.json_key not in data:
                     return None
                     
