@@ -1,6 +1,6 @@
 import json
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
-from homeassistant.const import UnitOfElectricPotential, UnitOfElectricCurrent, UnitOfPower, UnitOfTemperature, UnitOfEnergy, UnitOfTime
+from homeassistant.const import UnitOfElectricPotential, UnitOfElectricCurrent, UnitOfPower, UnitOfTemperature, UnitOfEnergy
 from .const import DOMAIN
 from .entity import DeEvChargerEntity
 
@@ -14,19 +14,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
         EvChargerStateSensor(coordinator, entry, "153", "Live Status Text", "mdi:information"),
         EvChargerStateSensor(coordinator, entry, "105", "Last Session History", "mdi:history"),
         
+        # NEW: Last Session Energy (extracted from DP 105, key 'c')
+        EvChargerJsonSensor(coordinator, entry, "105", "Last Session Energy", "c", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, None),
+
         # DP 102 - Real Time Metrics
         EvChargerJsonSensor(coordinator, entry, "102", "Temperature", "t", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS, 0.1, SensorStateClass.MEASUREMENT),
         EvChargerJsonSensor(coordinator, entry, "102", "Session Power", "p", SensorDeviceClass.POWER, UnitOfPower.KILO_WATT, 0.1, SensorStateClass.MEASUREMENT),
         EvChargerJsonSensor(coordinator, entry, "102", "Session Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, SensorStateClass.TOTAL_INCREASING),
-        EvChargerJsonSensor(coordinator, entry, "102", "Session Duration", "d", SensorDeviceClass.DURATION, UnitOfTime.SECONDS, 0.1, None),
+        
+        # CHANGED: Session Duration with Custom HH:MM String Formatting
+        EvChargerDurationSensor(coordinator, entry, "102", "Session Duration"),
         
         # DP 106 - Hardware / Lifetime Information
         EvChargerJsonSensor(coordinator, entry, "106", "Control Pilot Voltage", "cp", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, 1.0, SensorStateClass.MEASUREMENT),
-        
-        # Fixed: Scaled by 0.1
         EvChargerJsonSensor(coordinator, entry, "106", "Lifetime Energy", "e", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 0.1, SensorStateClass.TOTAL_INCREASING),
-        
-        # Fixed: Renamed from Time to Sessions, scaled by 0.1, removed duration formatting
         EvChargerJsonSensor(coordinator, entry, "106", "Total Charging Sessions", "t", None, "sessions", 0.1, SensorStateClass.TOTAL_INCREASING),
     ]
     
@@ -54,6 +55,37 @@ class EvChargerStateSensor(DeEvChargerEntity, SensorEntity):
             return "None"
         return val
 
+class EvChargerDurationSensor(DeEvChargerEntity, SensorEntity):
+    """Extracts duration (d) from DP 102 and formats it as an HH:MM string."""
+    def __init__(self, coordinator, entry, dp, name):
+        super().__init__(coordinator, entry)
+        self.dp = dp
+        self._attr_name = f"{name}"
+        self._attr_unique_id = f"de_ev_duration_{dp}"
+        self._attr_icon = "mdi:timer-outline"
+
+    @property
+    def native_value(self):
+        raw = self.coordinator.data.get(self.dp)
+        if raw:
+            try:
+                data = json.loads(raw)
+                if "d" not in data:
+                    return None
+                
+                # Scale by 0.1 to get total seconds
+                total_seconds = float(data["d"]) * 0.1
+                
+                # Calculate hours and minutes
+                hours = int(total_seconds // 3600)
+                minutes = int((total_seconds % 3600) // 60)
+                
+                # Format exactly as HH:MM
+                return f"{hours:02d}:{minutes:02d}"
+            except (ValueError, TypeError, json.JSONDecodeError):
+                return None
+        return None
+
 class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
     """Extracts a specific key from a JSON string Data Point."""
     def __init__(self, coordinator, entry, dp, name, json_key, device_class, unit, scale, state_class):
@@ -74,14 +106,18 @@ class EvChargerJsonSensor(DeEvChargerEntity, SensorEntity):
         if raw:
             try:
                 data = json.loads(raw)
-                # Parse as int first if possible, fallback to float, so count scales cleanly
-                val = float(data.get(self.json_key, 0))
                 
-                # If we scale by 0.1 and it's a session count, we want a clean integer
+                # ONLY extract the data if the key actually exists in the JSON payload
+                if self.json_key not in data:
+                    return None
+                    
+                val = float(data[self.json_key])
                 result = val * self.scale
+                
                 if self.json_key == "t" and self.dp == "106":
                     return int(result)
                 return round(result, 2)
+                
             except (ValueError, TypeError, json.JSONDecodeError):
                 return None
         return None
