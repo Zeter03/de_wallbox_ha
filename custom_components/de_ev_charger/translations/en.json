@@ -11,7 +11,7 @@
       },
       "auto": {
         "title": "Discovered Tuya Devices",
-        "description": "Select your charger from the list. You must provide the 16-character Local Key from the Tuya IoT Platform.",
+        "description": "Select your charger from the list and enter its 16-character Local Key.",
         "data": {
           "device_id": "Select your EV Charger",
           "local_key": "Tuya Local Key"
@@ -24,12 +24,44 @@
           "device_id": "Device ID",
           "ip_address": "IP Address (e.g., 192.168.1.50)",
           "local_key": "Tuya Local Key",
-          "version": "Protocol Version (leave as 3.5)"
+          "version": "Protocol Version"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure dé EV Charger",
+        "description": "Update the IP address or Local Key without losing entity history.",
+        "data": {
+          "device_id": "Device ID",
+          "ip_address": "IP Address",
+          "local_key": "Tuya Local Key",
+          "version": "Protocol Version"
         }
       }
     },
     "error": {
-      "no_devices": "No devices found via UDP broadcast. Please make sure the charger is powered on and on the same VLAN."
+      "no_devices": "No devices found via UDP broadcast. Please configure manually.",
+      "cannot_connect": "Unable to reach the charger at that IP address.",
+      "connection_refused": "Charger refused connection. Close the Smart Life app or any other Tuya integration holding its single local slot.",
+      "invalid_credentials": "Charger answered, but replies could not be decrypted. Check your Local Key and protocol version."
+    },
+    "abort": {
+      "already_configured": "This EV Charger is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "state": {
+          "sleep": "Standby",
+          "idle": "Ready",
+          "plugged_in": "Plugged in",
+          "charging": "Charging",
+          "waiting": "Waiting",
+          "fault": "Fault",
+          "paused": "Paused",
+          "charged": "Charged"
+        }
+      }
     }
   }
 }

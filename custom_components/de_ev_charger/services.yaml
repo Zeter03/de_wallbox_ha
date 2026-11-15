@@ -1,0 +1,14 @@
+release_connection:
+  name: Release local connection
+  description: Temporarily disconnect Home Assistant from the charger so the Smart Life app can connect (0 minutes resumes immediately).
+  fields:
+    duration_minutes:
+      name: Duration (minutes)
+      description: How many minutes to pause polling and release the charger's single TCP slot.
+      required: true
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: min
